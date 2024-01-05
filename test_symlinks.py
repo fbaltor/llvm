@@ -3,9 +3,6 @@
 import argparse
 from pathlib import Path
 
-
-LLVM_VERSIONS = ["11", "12", "13", "14", "15", "16", "17", "18", "19"]
-
 LLVM_TOOLS = [
     "bugpoint",
     "clang",
@@ -111,65 +108,32 @@ LLVM_TOOLS = [
 ]
 
 
-def symlink_with_version(version):
-    if version not in LLVM_VERSIONS:
-        raise TypeError("LLVMVersionLinkFixer: error: Not a valid llvm version")
-
-    llvm_bin_dir = Path(f"/usr/lib/llvm-{version}/bin")
-    if not llvm_bin_dir.is_dir():
-        raise OSError(
-            f"LLVMVersionLinkFixer: error: {str(llvm_bin_dir)} does not exists"
-        )
-
-    existent_tools = [item.name for item in llvm_bin_dir.iterdir()]
-    diff_tools = list(set(LLVM_TOOLS) - set(existent_tools))
-    if diff_tools:
-        print("Missing the following tools")
-        print(*diff_tools, sep=", ")
-        raise OSError(
-            f"LLVMVersionLinkFixer: error: {str(llvm_bin_dir)} does not contain all llvm tools"
-        )
-
-    usr_bin_dir = Path("/usr/bin")
-    for tool in LLVM_TOOLS:
-        link = usr_bin_dir / tool
-        if link.is_file():
-            link.unlink()
-        link.symlink_to(llvm_bin_dir / tool)
-
-
-def symlink_with_src(src):
-    raise NotImplementedError
-
-
 def main():
-    parser = argparse.ArgumentParser(
-        prog="LLVMVersionLinkFixer",
-        description="Naive program to create symlinks in /usr/bin of an installed llvm \
-                version under Unix systems",
-    )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-v", "--version")
-    group.add_argument("--src")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--version", required=True)
     args = parser.parse_args()
 
-    if args.version and args.src:
-        raise TypeError(
-            "LLVMVersionLinkFixer: error: \
-                    argument --src: not allowed with argument -v/--version"
-        )
+    usr_bin_dir = Path("/usr/bin")
+    llvm_bin_dir = Path(f"/usr/lib/llvm-{args.version}/bin")
 
-    if args.version is None and args.src is None:
-        raise TypeError(
-            "LLVMVersionLinkFixer: error: \
-                    one of the arguments -v/--version --src is required"
-        )
+    if not llvm_bin_dir.is_dir():
+        raise OSError
 
-    if args.version is not None:
-        symlink_with_version(args.version)
+    ok = []
+    failed = []
+    for tool in LLVM_TOOLS:
+        if (usr_bin_dir / tool).resolve() == (llvm_bin_dir / tool).resolve():
+            ok.append(tool)
+            print(f"{tool}: OK")
+        else:
+            failed.append(tool)
+            print(f"{tool}: FAILED")
 
-    if args.src is not None:
-        symlink_with_src(args.src)
+    if not failed:
+        print("\nAll tools are properly symlinked")
+    else:
+        print("\nThe following tools failed to be verified:")
+        print(*failed, sep=", ")
 
 
 if __name__ == "__main__":
